@@ -1,0 +1,86 @@
+diff --git a/services/surfaceflinger/Layer.cpp b/services/surfaceflinger/Layer.cpp
+index a621f1b..e8d77bd 100644
+--- a/services/surfaceflinger/Layer.cpp
++++ b/services/surfaceflinger/Layer.cpp
+@@ -182,11 +182,17 @@ status_t Layer::setBuffers( uint32_t w, uint32_t h,
+     mSurfaceTexture->setDefaultBufferSize(w, h);
+     mSurfaceTexture->setDefaultBufferFormat(format);
+ 
+-    if (mFlinger->getUseDithering()) {
+-        // we use the red index
+-        int displayRedSize = displayInfo.getSize(PixelFormatInfo::INDEX_RED);
+-        int layerRedsize = info.getSize(PixelFormatInfo::INDEX_RED);
+-        mNeedsDithering = layerRedsize > displayRedSize;
++    int useDither = mFlinger->getUseDithering();
++    if (useDither) {
++        if (useDither == 2) {
++            mNeedsDithering = true;
++        }
++        else {
++            // we use the red index
++            int displayRedSize = displayInfo.getSize(PixelFormatInfo::INDEX_RED);
++            int layerRedsize = info.getSize(PixelFormatInfo::INDEX_RED);
++            mNeedsDithering = (layerRedsize > displayRedSize);
++        }
+     } else {
+         mNeedsDithering = false;
+     }
+diff --git a/services/surfaceflinger/SurfaceFlinger.cpp b/services/surfaceflinger/SurfaceFlinger.cpp
+index ccf3c8a..a5b8eb7 100644
+--- a/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -113,7 +113,7 @@ SurfaceFlinger::SurfaceFlinger()
+ #endif
+         mConsoleSignals(0),
+         mSecureFrameBuffer(0),
+-        mUseDithering(false)
++        mUseDithering(0)
+ {
+     init();
+ }
+@@ -134,8 +134,8 @@ void SurfaceFlinger::init()
+     property_get("debug.sf.ddms", value, "0");
+     mDebugDDMS = atoi(value);
+ 
+-    property_get("persist.sys.use_dithering", value, "0");
+-    mUseDithering = atoi(value) == 1;
++    property_get("persist.sys.use_dithering", value, "1");
++    mUseDithering = atoi(value);
+ 
+     if (mDebugDDMS) {
+         DdmConnection::start(getServiceName());
+@@ -283,7 +283,12 @@ status_t SurfaceFlinger::readyToRun()
+     glEnableClientState(GL_VERTEX_ARRAY);
+     glEnable(GL_SCISSOR_TEST);
+     glShadeModel(GL_FLAT);
+-    glDisable(GL_DITHER);
++    if (mUseDithering == 0 || mUseDithering == 1) {
++        glDisable(GL_DITHER);
++    }
++    else if (mUseDithering == 2) {
++        glEnable(GL_DITHER);
++    }
+     glDisable(GL_CULL_FACE);
+ 
+     const uint16_t g0 = pack565(0x0F,0x1F,0x0F);
+diff --git a/services/surfaceflinger/SurfaceFlinger.h b/services/surfaceflinger/SurfaceFlinger.h
+index b7a60f6..374f5bc 100644
+--- a/services/surfaceflinger/SurfaceFlinger.h
++++ b/services/surfaceflinger/SurfaceFlinger.h
+@@ -219,6 +219,7 @@ public:
+ 
+     GLuint getProtectedTexName() const { return mProtectedTexName; }
+ 
++    // 0: surface doesn't need dithering, 1: use if necessary, 2: use permanently
+     inline int  getUseDithering() const { return mUseDithering; }
+ 
+ 
+@@ -440,7 +441,7 @@ private:
+    // only written in the main thread, only read in other threads
+    volatile     int32_t                     mSecureFrameBuffer;
+ 
+-                bool                        mUseDithering;
++                int                         mUseDithering;
+ };
+ 
+ // ---------------------------------------------------------------------------

@@ -1,0 +1,58 @@
+diff --git a/libc/Android.mk b/libc/Android.mk
+index ae54004..088dcb4 100644
+--- a/libc/Android.mk
++++ b/libc/Android.mk
+@@ -579,6 +579,13 @@ ifeq ($(TARGET_ARCH),arm)
+ libc_crt_target_cflags += -DCRT_LEGACY_WORKAROUND
+ endif
+ 
++
++
++ifeq ($(BOARD_USE_NASTY_PTHREAD_CREATE_HACK),true)
++libc_common_cflags += -DNASTY_PTHREAD_CREATE_HACK
++endif
++
++
+ # Define some common includes
+ # ========================================================
+ libc_common_c_includes := \
+diff --git a/libc/bionic/pthread.c b/libc/bionic/pthread.c
+index 3435d21..7cc55f4 100644
+--- a/libc/bionic/pthread.c
++++ b/libc/bionic/pthread.c
+@@ -387,6 +387,17 @@ int pthread_create(pthread_t *thread_out, pthread_attr_t const * attr,
+ }
+ 
+ 
++#ifdef NASTY_PTHREAD_CREATE_HACK
++int _debug_pthread_create(void *debug0, void *debug1, pthread_t *thread,
++                          const pthread_attr_t *attr,
++                          void *(*start_routine) (void *), void *arg)
++{
++    return pthread_create(thread, attr, start_routine, arg);
++}
++#endif
++
++
++
+ int pthread_attr_init(pthread_attr_t * attr)
+ {
+     *attr = gDefaultPthreadAttr;
+diff --git a/libc/include/pthread.h b/libc/include/pthread.h
+index 56c48ea..08e034b 100644
+--- a/libc/include/pthread.h
++++ b/libc/include/pthread.h
+@@ -138,6 +138,13 @@ int pthread_getattr_np(pthread_t thid, pthread_attr_t * attr);
+ 
+ int pthread_create(pthread_t *thread, pthread_attr_t const * attr,
+                    void *(*start_routine)(void *), void * arg);
++
++#ifdef NASTY_PTHREAD_CREATE_HACK
++int _debug_pthread_create(void *debug0, void *debug1, pthread_t *thread,
++                          const pthread_attr_t *attr,
++                          void *(*start_routine) (void *), void *arg);
++#endif
++
+ void pthread_exit(void * retval);
+ int pthread_join(pthread_t thid, void ** ret_val);
+ int pthread_detach(pthread_t  thid);

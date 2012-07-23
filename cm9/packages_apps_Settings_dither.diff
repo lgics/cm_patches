@@ -1,0 +1,134 @@
+diff --git a/res/values/arrays.xml b/res/values/arrays.xml
+index 031c1b1..53e06e6 100644
+--- a/res/values/arrays.xml
++++ b/res/values/arrays.xml
+@@ -1286,5 +1286,18 @@
+         <item>5000</item>
+         <item>10000</item>
+     </integer-array>
++
++    <string-array name="dithering_entries" translatable="false">
++        <item>@string/dithering_no_dither</item>
++        <item>@string/dithering_color_banding</item>
++        <item>@string/dithering_blur_effect</item>
++    </string-array>
++
++    <string-array name="dithering_values" translatable="false">
++        <item>0</item>
++        <item>1</item>
++        <item>2</item>
++    </string-array>
++
+ <!-- **** CYANOGENMOD EDITS END **** -->
+ </resources>
+diff --git a/res/values/strings.xml b/res/values/strings.xml
+index 1dde2d9..bd1c8b1 100644
+--- a/res/values/strings.xml
++++ b/res/values/strings.xml
+@@ -1687,8 +1687,10 @@
+     <string name="pref_purgeable_assets_summary">Purging of bitmap memory assets allows the freeing of more RAM when needed (requires reboot)</string>
+ 
+     <!-- Performance Settings : Dithering -->
+-    <string name="pref_use_dithering_title">Surface dithering</string>
+-    <string name="pref_use_dithering_summary">Dithering improves image quality on some displays at the cost of performance (requires reboot)</string>
++    <string name="pref_use_dithering_title">Surface improvement</string>
++    <string name="dithering_no_dither">Disable dithering</string>
++    <string name="dithering_color_banding">Fix color banding (default)</string>
++    <string name="dithering_blur_effect">Fix color banding and blur effect</string>
+ 
+     <!-- Performance Settings : 16bpp Alpha -->
+     <string name="pref_use_16bpp_alpha_title">16bit transparency</string>
+diff --git a/res/xml/performance_settings.xml b/res/xml/performance_settings.xml
+index c55c664..24ce692 100644
+--- a/res/xml/performance_settings.xml
++++ b/res/xml/performance_settings.xml
+@@ -32,13 +32,16 @@
+         android:summary="@string/memory_management_summary" />
+ 
+     <CheckBoxPreference
+-        android:key="pref_use_dithering"
+-        android:title="@string/pref_use_dithering_title"
+-        android:summary="@string/pref_use_dithering_summary" />
+-
+-    <CheckBoxPreference
+         android:key="pref_use_16bpp_alpha"
+         android:title="@string/pref_use_16bpp_alpha_title"
+         android:summary="@string/pref_use_16bpp_alpha_summary" />
+ 
++    <ListPreference
++        android:key="pref_use_dithering"
++        android:persistent="false"
++        android:dialogTitle="@string/pref_use_dithering_title"
++        android:title="@string/pref_use_dithering_title"
++        android:entries="@array/dithering_entries"
++        android:entryValues="@array/dithering_values"/>
++
+ </PreferenceScreen>
+diff --git a/src/com/android/settings/cyanogenmod/PerformanceSettings.java b/src/com/android/settings/cyanogenmod/PerformanceSettings.java
+index 9eb0bf8..f3f6a81 100644
+--- a/src/com/android/settings/cyanogenmod/PerformanceSettings.java
++++ b/src/com/android/settings/cyanogenmod/PerformanceSettings.java
+@@ -22,6 +22,7 @@ import android.os.Bundle;
+ import android.os.SystemProperties;
+ import android.preference.CheckBoxPreference;
+ import android.preference.Preference;
++import android.preference.ListPreference;
+ import android.preference.PreferenceScreen;
+ 
+ import com.android.settings.R;
+@@ -44,7 +45,7 @@ public class PerformanceSettings extends SettingsPreferenceFragment
+ 
+     private static final String USE_16BPP_ALPHA_PROP = "persist.sys.use_16bpp_alpha";
+ 
+-    private CheckBoxPreference mUseDitheringPref;
++    private ListPreference mUseDitheringPref;
+ 
+     private CheckBoxPreference mUse16bppAlphaPref;
+ 
+@@ -60,13 +61,12 @@ public class PerformanceSettings extends SettingsPreferenceFragment
+ 
+             PreferenceScreen prefSet = getPreferenceScreen();
+ 
+-            mUseDitheringPref = (CheckBoxPreference) prefSet.findPreference(USE_DITHERING_PREF);
+-            mUse16bppAlphaPref = (CheckBoxPreference) prefSet.findPreference(USE_16BPP_ALPHA_PREF);
+-
+-            String useDithering = SystemProperties.get(USE_DITHERING_PERSIST_PROP,
+-                    USE_DITHERING_DEFAULT);
+-            mUseDitheringPref.setChecked("1".equals(useDithering));
++            String useDithering = SystemProperties.get(USE_DITHERING_PERSIST_PROP, USE_DITHERING_DEFAULT);
++            mUseDitheringPref = (ListPreference) prefSet.findPreference(USE_DITHERING_PREF);
++            mUseDitheringPref.setOnPreferenceChangeListener(this);
++            mUseDitheringPref.setValue(useDithering);
+ 
++            mUse16bppAlphaPref = (CheckBoxPreference) prefSet.findPreference(USE_16BPP_ALPHA_PREF);
+             String use16bppAlpha = SystemProperties.get(USE_16BPP_ALPHA_PROP, "0");
+             mUse16bppAlphaPref.setChecked("1".equals(use16bppAlpha));
+ 
+@@ -88,10 +88,7 @@ public class PerformanceSettings extends SettingsPreferenceFragment
+ 
+     @Override
+     public boolean onPreferenceTreeClick(PreferenceScreen preferenceScreen, Preference preference) {
+-        if (preference == mUseDitheringPref) {
+-            SystemProperties.set(USE_DITHERING_PERSIST_PROP,
+-                    mUseDitheringPref.isChecked() ? "1" : "0");
+-        } else if (preference == mUse16bppAlphaPref) {
++        if (preference == mUse16bppAlphaPref) {
+             SystemProperties.set(USE_16BPP_ALPHA_PROP,
+                     mUse16bppAlphaPref.isChecked() ? "1" : "0");
+         } else {
+@@ -103,8 +100,13 @@ public class PerformanceSettings extends SettingsPreferenceFragment
+     }
+ 
+     public boolean onPreferenceChange(Preference preference, Object newValue) {
+-
+-        return false;
++        if (preference == mUseDitheringPref) {
++            String newVal = (String) newValue;
++            int index = mUseDitheringPref.findIndexOfValue(newVal);
++            SystemProperties.set(USE_DITHERING_PERSIST_PROP, newVal);
++            mUseDitheringPref.setSummary(mUseDitheringPref.getEntries()[index]);
++        }
++        return true;
+     }
+ 
+ }

@@ -1,0 +1,62 @@
+diff --git a/Source/JavaScriptCore/Android.mk b/Source/JavaScriptCore/Android.mk
+index 48f326a..42a322c 100644
+--- a/Source/JavaScriptCore/Android.mk
++++ b/Source/JavaScriptCore/Android.mk
+@@ -23,6 +23,10 @@
+ ## OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ ##
+ 
++ifneq ($(ARCH_ARM_HAVE_ARMV7A),true)
++  LOCAL_ARM_MODE := arm
++endif
++
+ LOCAL_SRC_FILES := \
+ 	API/JSValueRef.cpp \
+ 	API/JSCallbackConstructor.cpp \
+@@ -34,6 +38,8 @@ LOCAL_SRC_FILES := \
+ 	API/OpaqueJSString.cpp \
+ 	\
+ 	assembler/ARMv7Assembler.cpp \
++	assembler/ARMAssembler.cpp \
++	assembler/MacroAssemblerARM.cpp \
+ 	\
+ 	bytecode/CodeBlock.cpp \
+ 	bytecode/JumpTable.cpp \
+@@ -70,7 +76,9 @@ LOCAL_SRC_FILES := \
+ 	jit/JITCall.cpp \
+ 	jit/JITCall32_64.cpp \
+ 	jit/JITOpcodes.cpp \
++	jit/JITOpcodes32_64.cpp \
+ 	jit/JITPropertyAccess.cpp \
++	jit/JITPropertyAccess32_64.cpp \
+ 	jit/JITStubs.cpp \
+ 	jit/ThunkGenerators.cpp \
+ 	\
+diff --git a/Source/JavaScriptCore/assembler/MacroAssemblerARM.cpp b/Source/JavaScriptCore/assembler/MacroAssemblerARM.cpp
+index 2db5df1..09ba8c0 100644
+--- a/Source/JavaScriptCore/assembler/MacroAssemblerARM.cpp
++++ b/Source/JavaScriptCore/assembler/MacroAssemblerARM.cpp
+@@ -36,8 +36,22 @@
+ #include <fcntl.h>
+ #include <unistd.h>
+ #include <elf.h>
++#if OS(ANDROID)
++typedef struct
++{
++  int a_type;      /* Entry type */
++  union
++  {
++    long int a_val;    /* Integer value */
++    void *a_ptr;    /* Pointer value */
++    void (*a_fcn) (void);  /* Function pointer value */
++  } a_un;
++} Elf32_auxv_t;
++#define HWCAP_VFP 64
++#else
+ #include <asm/hwcap.h>
+ #endif
++#endif
+ 
+ namespace JSC {
+ 
+
